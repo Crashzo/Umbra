@@ -1,0 +1,56 @@
+import_code("/home/crasho/Desktop/UmbraTool/art.src")
+import_code("/home/crasho/Desktop/UmbraTool/colors.src")
+import_code("/home/crasho/Desktop/UmbraTool/helpers.src")
+import_code("/home/crasho/Desktop/UmbraTool/prompt.src")
+import_code("/home/crasho/Desktop/UmbraTool/commands.src")
+import_code("/home/crasho/Desktop/UmbraTool/exploiter.src")
+clear_screen()
+logo()
+// global session state
+main_session = {}
+main_session.exit = false
+main_session.handlerType = "start"
+main_session.object = get_shell
+main_session.pub_ip = get_shell.host_computer.public_ip
+main_session.lan_ip = get_shell.host_computer.local_ip
+main_session.user = active_user
+main_session.cwd = "/"
+main_session.libList = {}
+
+// commands registry
+commands = register_commands()
+
+print("\n")
+
+while 1
+    prompt = build_prompt(main_session)
+
+    input = user_input(prompt)
+    if input == null then continue
+    input = input.trim
+    if input == "" then continue
+
+    if input.lower == "exit" then
+        print("bye")
+        break
+    end if
+
+    args = input.split("\s")
+    cmd = args.pull
+    cmd = cmd.lower
+
+    if not commands.hasIndex(cmd) then
+        print("Command not found")
+        continue
+    end if
+
+    if args.indexOf("-h") != null or args.indexOf("--help") != null then
+        print(commands[cmd].help)
+        continue
+    end if
+
+    // execute command
+    commands[cmd].func(main_session, args)
+
+    if main_session.exit then break
+end while

@@ -1,0 +1,2014 @@
+// -------------------------------------------
+// HELP
+// -------------------------------------------
+cmd_help = function(sess, args)
+    txt = bold + orange + "Commands:\n" + boldend + stopCol
+    txt = txt + bold + orange +" help " + stopCol + boldend + "                         - show this help\n"
+    txt = txt + bold + orange +" clear " + stopCol + boldend + "                        - clear screen\n"
+    txt = txt + bold + orange +" exit " +stopCol + boldend + "                          - exit umbra\n"
+    txt = txt + bold + orange +" pwd " + stopCol + boldend + "                          - returns current directory your in\n"
+    txt = txt + bold + orange +" cd " + stopCol + boldend + "                           - change directory\n"
+    txt = txt + bold + orange +" ls " + stopCol + boldend + "                           - list folder\n"
+    txt = txt + bold + orange +" tree " + stopCol +boldend + "                          - recursive tree view\n"
+    txt = txt + bold + orange + " cat " + stopCol + boldend + "                         - show content of text file\n"
+    txt = txt + bold + orange +" exploit " + stopCol + boldend + "                      - scan+exploit target\n"
+    txt = txt + bold + orange +" disconnect " + stopCol + boldend + "                   - return back to start handler\n"
+    txt = txt + bold + orange +" nmap " +stopCol + boldend + "                          - scan ip\n"
+    txt = txt + bold + orange +" crack " + stopCol + boldend + "                        - cracks MD5 Hash\n"
+    txt = txt + bold + orange + " sudo -u " + stopCol + boldend + "                     - login user using jumpfile\n"
+    txt = txt + bold + orange + " exec " + stopCol + boldend + "                        - execute program\n"
+    txt = txt + bold + orange +" loot " + stopCol + boldend + "                         - dumps  credentials\n"
+    txt = txt + bold + orange +" rm " + stopCol + boldend + "                           - removes a file | -r removes folder\n"
+    txt = txt + bold + orange +" touch " + stopCol + boldend + "                        - create a txt file\n"
+    txt = txt + bold + orange +" mkdir " + stopCol + boldend + "                        - create a folder\n"
+    txt = txt + bold + orange +" back " + stopCol + boldend + "                         - return to previous session\n"
+    txt = txt + bold + orange +" log " + stopCol + boldend + "                          - log -d downloads logs | -u uploads logs\n" 
+    txt = txt + bold + orange +" targets " + stopCol + boldend + "                      - shows list of targets from exploitscan\n"
+    txt = txt + bold + orange +" switch " + stopCol + boldend + "                       - lets you pick from targets list\n"
+    txt = txt + bold + orange +" download " + stopCol + boldend + "                     - downloads a file\n"
+    txt = txt + bold + orange +" upload " + stopCol + boldend + "                       - uploads a file\n"
+    txt = txt + bold + orange +" ssh " + stopCol + boldend + "                          - connect to ssh server\n"
+    txt = txt + bold + orange +" passwd " + stopCol + boldend + "                       - change user password\n"
+    txt = txt + bold + orange +" chmod " + stopCol + boldend + "                        - change file/folder permissions\n"
+    txt = txt + bold + orange +" nslookup " + stopCol + boldend + "                      - resolve domain to IP\n"
+    txt = txt + bold + orange +" chown " + stopCol + boldend + "                        - change file/folder owner\n"
+    txt = txt + bold + orange +" chgrp " + stopCol + boldend + "                        - change file/folder group\n"
+    txt = txt + bold + orange +" apt-get " + stopCol + boldend + "                      - package manager\n"
+    txt = txt + bold + orange +" getlib " + stopCol + boldend + "                       - import library\n"
+    txt = txt + bold + orange +" libs " + stopCol + boldend + "                         - list imported libraries\n"
+    txt = txt + bold + orange +" uselib " + stopCol + boldend + "                       - set active library\n"
+    txt = txt + bold + orange +" dellib " + stopCol + boldend + "                       - delete library\n"
+    print(txt)
+end function
+
+
+cmd_clear = function(sess, args)
+    clear_screen
+    logo()
+end function
+
+cmd_exit = function(sess, args)
+    sess.exit = true
+end function
+
+cmd_pwd = function(sess, args)
+    print(sess.cwd)
+end function
+
+
+cmd_chgrp = function(sess, args)
+    if not args or (args.len != 2 and args.len != 3) then
+        print("Usage:")
+        print("  chgrp <GROUP> <PATH>")
+        print("  chgrp -r <GROUP> <PATH>")
+        return
+    end if
+
+    isRecursive = 0
+    group = ""
+    pathFile = ""
+
+    if args.len == 2 then
+        group = args[0]
+        pathFile = resolve_path(sess.cwd, args[1])
+    else
+        if args[0] != "-r" then
+            print("chgrp: unknown option " + args[0])
+            return
+        end if
+        isRecursive = 1
+        group = args[1]
+        pathFile = resolve_path(sess.cwd, args[2])
+    end if
+
+    comp = get_comp(sess)
+    if comp == null then
+        print("chgrp: unsupported handlerType: " + sess.handlerType)
+        return
+    end if
+
+    file = comp.File(pathFile)
+    if file == null then
+        print("chgrp: can't find " + pathFile)
+        return
+    end if
+
+    // Grey Hack supports: file.chgrp(group, recursive)
+    out = file.chgrp(group, isRecursive)
+    if out then
+        print(out)
+        return
+    end if
+
+    print("chgrp: updated group of " + pathFile + " to " + group)
+end function
+
+cmd_libs = function(sess, args)
+    if not sess.hasIndex("libList") or sess.libList.len == 0 then
+        print("No libraries imported.")
+        return
+    end if
+
+    info = "INDEX LIBRARY PUBLICIP LOCALIP VERSION\n"
+    info = info + "----- ------- -------- ------- -------\n"
+
+    for index in sess.libList
+        entry = index["value"]
+
+        line = str(index.key) + " " + typeof(entry.lib).lower.replace("lib","") + " " + entry.publicIP + " " + entry.localIP + " " + entry.version
+
+        // highlight active
+        if entry.used then
+            line = bold + dorange + line + stopCol + boldend
+        end if
+
+        info = info + line + "\n"
+    end for
+
+    print("\n" + format_columns(info) + "\n")
+end function
+
+
+cmd_uselib = function(sess, args)
+    if not args or args.len < 1 then
+        print("Usage: uselib <INDEX>")
+        return
+    end if
+
+    if not sess.hasIndex("libList") or sess.libList.len == 0 then
+        print("uselib: no libraries imported")
+        return
+    end if
+
+    idx = args[0].to_int
+    if typeof(idx) != "number" then
+        print("uselib: invalid index")
+        return
+    end if
+
+    if not sess.libList.hasIndex(idx) then
+        print("uselib: index not found")
+        return
+    end if
+
+    selected = sess.libList[idx]
+    selectedType = typeof(selected.lib)
+
+    // disable previous "used" of same lib type
+    for libEntry in sess.libList
+        if typeof(libEntry["value"].lib) == selectedType then
+            sess.libList[libEntry.key].used = 0
+        end if
+    end for
+
+    // mark selected as used
+    sess.libList[idx].used = 1
+
+    // also store quick-access active lib fields
+    sess.activeLib = selected.lib
+    sess.activeLibType = selectedType.lower.replace("lib","")
+    sess.activeLibPath = selected.path
+    sess.activeLibVersion = selected.version
+
+    print("Active library: " + sess.activeLibType + " (index " + str(idx) + ")")
+end function
+
+cmd_dellib = function(sess, args)
+    if not args or args.len < 1 then
+        print("Usage: dellib <INDEX|A-B> ...")
+        return
+    end if
+
+    if not sess.hasIndex("libList") or sess.libList.len == 0 then
+        print("dellib: no libraries imported")
+        return
+    end if
+
+    for a in args
+        // range "A-B"
+        if a.indexOf("-") != null and a.split("-").len == 2 then
+            p = a.split("-")
+            start = p[0].to_int
+            stop = p[1].to_int
+
+            if typeof(start) != "number" or typeof(stop) != "number" then
+                print("dellib: invalid range: " + a)
+                continue
+            end if
+
+            for i in range(start, stop)
+                if sess.libList.hasIndex(i) then sess.libList.remove(i)
+            end for
+        else
+            idx = a.to_int
+            if typeof(idx) != "number" then
+                print("dellib: invalid index: " + a)
+                continue
+            end if
+            if sess.libList.hasIndex(idx) then sess.libList.remove(idx)
+        end if
+    end for
+
+    print("dellib: updated library list")
+end function
+
+
+cmd_getlib = function(sess, args)
+    if not args or args.len < 1 then
+        print("Usage: getlib <LIBPATH>")
+        return
+    end if
+
+    if not sess.hasIndex("libList") then sess.libList = {}
+
+    libPath = resolve_path(sess.cwd, args[0])
+
+    lib = include_lib(libPath)
+    if not lib then
+        print("getlib: unable to load library: " + libPath)
+        return
+    end if
+
+    libType = typeof(lib)
+    libName = libType.lower.replace("lib","")
+
+    // best effort version
+    ver = "unknown"
+    if lib.hasIndex("load") then
+        tmp = lib.load(libPath)
+        if tmp and tmp.hasIndex("version") then ver = tmp.version
+    end if
+
+    // capture handler IP info for display
+    pub = sess.pub_ip
+    lan = sess.lan_ip
+    if pub == null then pub = "unknown"
+    if lan == null then lan = "unknown"
+
+    idx = sess.libList.len
+    sess.libList[idx] = {
+        "lib": lib,
+        "path": libPath,
+        "version": ver,
+        "publicIP": pub,
+        "localIP": lan,
+        "used": 0
+    }
+
+    print("Library imported: " + libName + " (index " + str(idx) + ")")
+end function
+
+
+
+cmd_chown = function(sess, args)
+    if not args or (args.len != 2 and args.len != 3) then
+        print("Usage:")
+        print("  chown <USER> <PATH>")
+        print("  chown -r <USER> <PATH>")
+        return
+    end if
+
+    isRecursive = 0
+    user = ""
+    pathFile = ""
+
+    if args.len == 2 then
+        user = args[0]
+        pathFile = resolve_path(sess.cwd, args[1])
+    else
+        if args[0] != "-r" then
+            print("chown: unknown option " + args[0])
+            return
+        end if
+        isRecursive = 1
+        user = args[1]
+        pathFile = resolve_path(sess.cwd, args[2])
+    end if
+
+    comp = get_comp(sess)
+    if comp == null then
+        print("chown: unsupported handlerType: " + sess.handlerType)
+        return
+    end if
+
+    file = comp.File(pathFile)
+    if file == null then
+        print("chown: can't find " + pathFile)
+        return
+    end if
+
+    // Grey Hack supports: file.chown(user, recursive)
+    out = file.chown(user, isRecursive)
+    if out then
+        print(out)
+        return
+    end if
+
+    print("chown: updated owner of " + pathFile + " to " + user)
+end function
+
+
+
+
+cmd_nslookup = function(sess, args)
+    if not args or args.len != 1 then
+        print("Usage: nslookup <domain>")
+        return
+    end if
+
+    address = args[0]
+    ip = nslookup(address)
+
+    if not ip or ip == "" then
+        print("nslookup: not found")
+        return
+    end if
+
+    print("Address: " + ip)
+end function
+
+
+
+
+cmd_touch = function(sess, args)
+    if not args or args.len != 1 then
+        print("Usage: touch <file>")
+        return
+    end if
+
+    pathFile = resolve_path(sess.cwd, args[0])
+    pathParent = parent_path(pathFile)
+
+    if pathParent == pathFile then
+        pathParent = sess.cwd
+    end if
+
+    comp = get_comp(sess)
+    if comp == null then
+        print("touch: unsupported handlerType: " + sess.handlerType)
+        return
+    end if
+
+    parent = comp.File(pathParent)
+    if not parent then
+        print("touch: " + pathParent + " not found")
+        return
+    end if
+    if not parent.has_permission("w") then
+        print("touch: permission denied")
+        return
+    end if
+
+    parts = pathFile.split("/")
+    filename = parts[parts.len - 1]
+
+    out = comp.touch(parent.path, filename)
+    if out and out != 1 then
+        print(out)
+        return
+    end if
+
+    print("Created: " + pathFile)
+end function
+
+cmd_mkdir = function(sess, args)
+    if not args or args.len != 1 then
+        print("Usage: mkdir <folder>")
+        return
+    end if
+
+    pathFile = resolve_path(sess.cwd, args[0])
+    pathParent = parent_path(pathFile)
+
+    if pathParent == pathFile then
+        pathParent = sess.cwd
+    end if
+
+    comp = get_comp(sess)
+    if comp == null then
+        print("mkdir: unsupported handlerType: " + sess.handlerType)
+        return
+    end if
+
+    existFile = comp.File(pathFile)
+    if existFile != null then
+        print("mkdir: " + existFile.path + " file exists")
+        return
+    end if
+
+    parent = comp.File(pathParent)
+    if parent == null then
+        print("mkdir: " + pathParent + " not found")
+        return
+    end if
+
+    if not parent.has_permission("w") then
+        print("mkdir: permission denied")
+        return
+    end if
+
+    parts = pathFile.split("/")
+    folderName = parts[parts.len - 1]
+
+    out = comp.create_folder(parent.path, folderName)
+    if out != null and out != 1 then
+        print(out)
+        return
+    end if
+
+    print("Created folder: " + pathFile)
+end function
+
+cmd_back = function(sess, args)
+    prev = pop_session(sess)
+    if prev == null then
+        print("back: no previous session")
+        return
+    end if
+
+    sess.object = prev.object
+    sess.handlerType = prev.handlerType
+    sess.cwd = prev.cwd
+    sess.pub_ip = prev.pub_ip
+    sess.lan_ip = prev.lan_ip
+    sess.user = prev.user
+
+    print("Returned to: " + sess.handlerType + " as " + sess.user)
+end function
+
+cmd_log = function(sess, args)
+    if not args or args.len < 1 then
+        print("Usage:")
+        print("  log -d   (download /var/system.log -> /home/logs/<ip>/system.log)")
+        print("  log -u   (upload /home/logs/<ip>/system.log -> /home/guest/system.log)")
+        return
+    end if
+
+    if sess.handlerType != "shell" then
+        print("log: supported only in shell handler (need remote shell)")
+        return
+    end if
+
+    mode = args[0]
+    remoteShell = sess.object
+    localShell = get_shell
+
+    if remoteShell == null then
+        print("log: no remote shell")
+        return
+    end if
+
+    // choose best ip label
+    ipLabel = sess.pub_ip
+    if ipLabel == null or ipLabel == "" then ipLabel = sess.lan_ip
+    if ipLabel == null or ipLabel == "" then ipLabel = "unknown"
+
+    // local folder structure
+    localRoot = "/home/logs"
+    localDir  = localRoot + "/" + ipLabel
+    localFile = localDir + "/system.log"
+
+    // ------------------------------------
+    // DOWNLOAD
+    // ------------------------------------
+    if mode == "-d" then
+        remoteFile = "/var/system.log"
+
+        // create local folders
+        localComp = localShell.host_computer
+        localComp.create_folder("/home", "logs")
+        localComp.create_folder(localRoot, ipLabel)
+
+        // destination must be a folder
+        res = remoteShell.scp(remoteFile, localDir, localShell)
+
+        if typeof(res) == "string" then
+            print("log: download error: " + res)
+            return
+        end if
+        if res != 1 then
+            print("log: download failed")
+            return
+        end if
+
+        print("Downloaded: " + remoteFile + " -> " + localFile)
+        return
+    end if
+
+    // ------------------------------------
+    // UPLOAD
+    // ------------------------------------
+    if mode == "-u" then
+        // verify local file exists
+        localComp = localShell.host_computer
+        f = localComp.File(localFile)
+        if f == null then
+            print("log: local log not found: " + localFile)
+            print("log: run 'log -d' first")
+            return
+        end if
+        if not f.has_permission("r") then
+            print("log: local log not readable: " + localFile)
+            return
+        end if
+
+        // IMPORTANT: destination must be a folder
+        remoteFolder = "/var"
+        remoteExpected = remoteFolder + "/system.log"
+
+        res = localShell.scp(localFile, remoteFolder, remoteShell)
+
+        if typeof(res) == "string" then
+            print("log: upload error: " + res)
+            return
+        end if
+        if res != 1 then
+            print("log: upload failed")
+            return
+        end if
+
+        print("Uploaded: " + localFile + " -> " + remoteExpected)
+        return
+    end if
+
+    print("log: unknown option " + mode)
+end function
+
+
+
+
+
+
+
+
+
+
+
+// -------------------------------------------
+// LS / CD / TREE 
+// -------------------------------------------
+cmd_cd = function(sess, args)
+    target = "/"
+    if args and args.len > 0 then target = args[0]
+
+    newPath = resolve_path(sess.cwd, target)
+
+    root = get_root(sess)
+    if root == null then
+        print("Error: no filesystem root")
+        return
+    end if
+
+    f = get_file_at(root, newPath)
+    if f == null then
+        print("cd: no such file or directory: " + newPath)
+        return
+    end if
+
+    if not f.is_folder then
+        print("cd: not a directory: " + newPath)
+        return
+    end if
+
+    sess.cwd = newPath
+end function
+
+
+cmd_ls = function(sess, args)
+    target = sess.cwd
+    if args and args.len > 0 then target = resolve_path(sess.cwd, args[0])
+
+    comp = get_comp(sess)
+    if comp == null then
+        print("ls: unsupported handlerType: " + sess.handlerType)
+        return
+    end if
+
+    folder = comp.File(target)
+    if folder == null then
+        print("ls: cannot access '" + target + "': No such file or directory")
+        return
+    end if
+
+    if not folder.has_permission("r") then
+        print("ls: permission denied")
+        return
+    end if
+
+    // header
+  print("UMBRA>LS")
+  print(format_columns("--" + bold + "perms" + boldend + "-----" + bold + "user" + boldend + "---" + bold + "group" + boldend + "----" + bold + "name" + boldend + "-------->") + "\n")
+  
+
+    // single file
+    if not folder.is_folder then
+        out = folder.permissions + " " + folder.owner + " " + folder.group + " " + folder.name
+        if folder.is_symlink then out = out + " --> " + folder.path(true)
+        print(format_columns(out))
+        return
+    end if
+
+    subFiles = folder.get_folders + folder.get_files
+    output = ""
+
+    for subFile in subFiles
+        nameFile = subFile.name
+        if subFile.is_folder then nameFile = "/" + nameFile
+
+        line = subFile.permissions + " " + subFile.owner + " " + subFile.group + " " + nameFile
+        if subFile.is_symlink then line = line + " --> " + subFile.path(true)
+
+        if output.len > 0 then output = output + "\n"
+        output = output + line
+    end for
+
+    if output == "" then output = "(empty)"
+    print(format_columns(output))
+end function
+
+
+
+
+
+
+
+
+tree_print = function(folder, indent, isLast)
+    prefix = ""
+    if indent > 0 then
+        prefix = "|  " * (indent-1)
+        if isLast then
+            prefix = prefix + "`- "
+        else
+            prefix = prefix + "|- "
+        end if
+    end if
+
+    print(bold + orange + prefix + "/" + folder.name)
+
+    items = []
+    for f in folder.get_folders
+        items.push({"type":"folder","obj":f, "name":f.name})
+    end for
+    for fi in folder.get_files
+        items.push({"type":"file","obj":fi, "name":fi.name})
+    end for
+
+    items = items.sort("name")
+
+    
+    if items.len == 0 then
+        emptyPrefix = "|  " * indent + "`- "
+        print(emptyPrefix + "(empty)")
+        return
+    end if
+
+    for i in range(0, items.len-1)
+        item = items[i]
+        last = (i == items.len-1)
+
+        if item.type == "folder" then
+            tree_print(item.obj, indent+1, last)
+        else
+            p = "|  " * indent
+            if indent > 0 then
+                p = "|  " * (indent-1)
+                if last then
+                    p = p + "`- "
+                else
+                    p = p + "|- "
+                end if
+            end if
+            print(p + item.obj.name)
+        end if
+    end for
+end function
+
+
+
+
+cmd_tree = function(sess, args)
+    target = sess.cwd
+    if args and args.len > 0 then target = resolve_path(sess.cwd, args[0])
+
+    root = get_root(sess)
+    f = get_file_at(root, target)
+
+    if f == null then
+        print("tree: cannot access '" + target + "': No such file or directory")
+        return
+    end if
+
+    if not f.is_folder then
+        print("tree: not a directory: " + target)
+        return
+    end if
+
+    tree_print(f, 0, true)
+end function
+
+// -------------------------------------------
+// CAT 
+// -------------------------------------------
+cmd_cat = function(sess, args)
+    if not args or args.len < 1 then
+        print("Usage: cat <path>")
+        return
+    end if
+
+    path = resolve_path(sess.cwd, args[0])
+
+    
+    if sess.handlerType == "file" then
+        root = get_root(sess)
+        f = get_file_at(root, path)
+        if f == null then
+            print("cat: file not found: " + path)
+            return
+        end if
+        if f.is_folder then
+            print("cat: " + path + ": Is a directory")
+            return
+        end if
+        if f.is_binary then
+            print("cat: can't open " + path + ": Binary file")
+            return
+        end if
+        if not f.has_permission("r") then
+            print("cat: permission denied: " + path)
+            return
+        end if
+        print(f.get_content)
+        return
+    end if
+
+    
+    comp = null
+if sess.handlerType == "start" then
+    comp = get_shell.host_computer
+else if sess.handlerType == "shell" then
+    comp = sess.object.host_computer
+else if sess.handlerType == "computer" then
+    comp = sess.object
+end if
+
+    if comp == null then
+        print("cat: unsupported handlerType")
+        return
+    end if
+
+    f = comp.File(path)
+    if f == null then
+        print("cat: file not found: " + path)
+        return
+    end if
+    if f.is_folder then
+        print("cat: " + path + ": Is a directory")
+        return
+    end if
+    if f.is_binary then
+        print("cat: can't open " + path + ": Binary file")
+        return
+    end if
+    if not f.has_permission("r") then
+        print("cat: permission denied: " + path)
+        return
+    end if
+
+    print(f.get_content)
+end function
+
+// -------------------------------------------
+// DISCONNECT (NEW)
+// -------------------------------------------
+cmd_disconnect = function(sess, args)
+    
+    sess.handlerType = "start"
+    sess.object = null
+    sess.cwd = "/"
+    sess.user = active_user
+    sess.pub_ip = get_shell.host_computer.public_ip
+    sess.lan_ip = get_shell.host_computer.local_ip
+
+    print("Disconnected. Back to local shell.")
+end function
+
+// -------------------------------------------
+// EXPLOIT
+
+cmd_exploit = function(sess, args)
+    if not args or args.len < 2 then
+        print("Usage:")
+        print("  exploit <ip> <port>")
+        print("  exploit <ip> <port> <lan_ip>")
+        print("  exploit <ip> <port> <lan_ip> <inject>")
+        return
+    end if
+
+    ip = args[0]
+    port = args[1].to_int
+
+    if typeof(port) != "number" then
+        print("exploit: port must be a number")
+        return
+    end if
+
+    lan_ip = ""
+    extra_inject = ""
+    injectArg = ""
+
+    // parse optional arguments
+    if args.len >= 3 then
+        if is_valid_ip(args[2]) then
+            lan_ip = args[2]
+            if args.len >= 4 then
+                extra_inject = args[3]
+            end if
+        else
+            // no lan ip, treat as inject string
+            extra_inject = args[2]
+        end if
+    end if
+
+    // build injectArg for overflow
+    if lan_ip != "" then
+        injectArg = lan_ip
+        if extra_inject != "" then
+            injectArg = injectArg + " " + extra_inject
+        end if
+    else
+        injectArg = extra_inject
+    end if
+
+    push_session(sess)
+
+    print("Scanning target " + ip + ":" + str(port) + " ...")
+    if lan_ip != "" then print("LAN Target: " + lan_ip)
+
+    objects = ExploitTarget(ip, port, injectArg)
+
+    if objects == null or objects.len == 0 then
+        print("No targets found.")
+        sess.targets = []
+        return
+    end if
+
+    sess.targets = objects
+    print("Targets found: " + str(objects.len))
+    print("Run: targets")
+    print("Run: use <id>")
+end function
+
+
+cmd_targets = function(sess, args)
+    if not sess.hasIndex("targets") or sess.targets == null or sess.targets.len == 0 then
+        print("targets: no saved targets")
+        print("Run: exploit <ip> <port> (injectArg)")
+        return
+    end if
+
+    print("")
+    print(bold + dorange + "INDX  HANDLER     USER        PUBLIC_IP         LAN_IP")
+    print(bold + dorange + "----------------------------------------------------------")
+
+    i = 1
+    for o in sess.targets
+        t = typeof(o)
+
+        pub = "unknown"
+        lan = "unknown"
+        u = "guest"
+
+        if t == "shell" then
+            pub = o.host_computer.public_ip
+            lan = o.host_computer.local_ip
+            u = check_user(o)
+        else if t == "computer" then
+            pub = o.public_ip
+            lan = o.local_ip
+            u = check_user(o)
+        end if
+
+        print(str(i) + "     " + t + "       " + u + "       " + pub + "      " + lan)
+        i = i + 1
+    end for
+
+    print("")
+end function
+
+cmd_upload = function(sess, args)
+    if not args or args.len < 2 then
+        print("Usage: upload <LOCAL_PATH> <REMOTE_FOLDER>")
+        print("Example: upload /home/guest/test.txt /tmp/")
+        return
+    end if
+
+    if sess.handlerType != "shell" then
+        print("upload: supported only in shell handler")
+        return
+    end if
+
+    remoteShell = sess.object
+    localShell = get_shell
+
+    localPath = resolve_path("/", args[0])
+    remoteFolder = resolve_path(sess.cwd, args[1])
+
+    // local file must exist
+    localComp = localShell.host_computer
+    f = localComp.File(localPath)
+    if f == null then
+        print("upload: local file not found: " + localPath)
+        return
+    end if
+    if f.is_folder then
+        print("upload: local path is a folder: " + localPath)
+        return
+    end if
+    if not f.has_permission("r") then
+        print("upload: local file not readable: " + localPath)
+        return
+    end if
+
+    // remote destination must be a folder
+    remoteComp = remoteShell.host_computer
+    destFolderObj = remoteComp.File(remoteFolder)
+    if destFolderObj == null then
+        print("upload: remote folder not found: " + remoteFolder)
+        return
+    end if
+    if not destFolderObj.is_folder then
+        print("upload: remote destination is not a folder: " + remoteFolder)
+        return
+    end if
+    if not destFolderObj.has_permission("w") then
+        print("upload: permission denied: " + remoteFolder)
+        return
+    end if
+
+    // upload local -> remote
+    res = localShell.scp(localPath, remoteFolder, remoteShell)
+
+    if typeof(res) == "string" then
+        print("upload: error: " + res)
+        return
+    end if
+    if res != 1 then
+        print("upload: failed")
+        return
+    end if
+
+    parts = localPath.split("/")
+    fname = parts[parts.len - 1]
+
+    print("Uploaded: " + localPath + " -> " + remoteFolder + "/" + fname)
+end function
+
+
+
+cmd_download = function(sess, args)
+    if not args or args.len < 2 then
+        print("Usage: download <REMOTE_PATH> <LOCAL_PATH>")
+        print("Example: download /var/system.log /home/guest/")
+        return
+    end if
+
+    if sess.handlerType != "shell" then
+        print("download: supported only in shell handler")
+        return
+    end if
+
+    remoteShell = sess.object
+    localShell = get_shell
+
+    remotePath = resolve_path(sess.cwd, args[0])
+    localPath = resolve_path("/", args[1])   // local destination
+
+    // scp() destination must be a folder
+    localDestFolder = localPath
+    if localDestFolder[-1] != "/" then
+        localDestFolder = parent_path(localDestFolder)
+    end if
+
+    // ensure destination folder exists locally
+    localComp = localShell.host_computer
+    destFolderObj = localComp.File(localDestFolder)
+    if destFolderObj == null then
+        print("download: local folder not found: " + localDestFolder)
+        return
+    end if
+    if not destFolderObj.has_permission("w") then
+        print("download: no write permission: " + localDestFolder)
+        return
+    end if
+
+    // download remote -> local
+    res = remoteShell.scp(remotePath, localDestFolder, localShell)
+
+    if typeof(res) == "string" then
+        print("download: error: " + res)
+        return
+    end if
+    if res != 1 then
+        print("download: failed")
+        return
+    end if
+
+    // filename is kept from source
+    parts = remotePath.split("/")
+    fname = parts[parts.len - 1]
+
+    print("Downloaded: " + remotePath + " -> " + localDestFolder + "/" + fname)
+end function
+
+
+
+
+cmd_switch = function(sess, args)
+    if not args or args.len < 1 then
+        print("Usage: switch <id>")
+        return
+    end if
+
+    if not sess.hasIndex("targets") or sess.targets == null or sess.targets.len == 0 then
+        print("use: no saved targets")
+        print("Run: exploit <ip> <port>")
+        return
+    end if
+
+    opt = args[0].to_int
+    if typeof(opt) != "number" then
+        print("use: invalid ID")
+        return
+    end if
+    if opt <= 0 or opt > sess.targets.len then
+        print("use: ID out of range")
+        return
+    end if
+
+    obj = sess.targets[opt - 1]
+    sess.object = obj
+    sess.handlerType = typeof(obj)
+
+    // update IPs
+    if sess.handlerType == "shell" then
+        sess.pub_ip = obj.host_computer.public_ip
+        sess.lan_ip = obj.host_computer.local_ip
+    else if sess.handlerType == "computer" then
+        sess.pub_ip = obj.public_ip
+        sess.lan_ip = obj.local_ip
+    end if
+
+    // update user
+    sess.user = check_user(obj)
+
+    // update cwd
+    if sess.user == "root" then
+        sess.cwd = "/root"
+    else
+        sess.cwd = "/home/" + sess.user
+    end if
+
+    print("Switched handler to: " + sess.handlerType + " as " + sess.user)
+end function
+
+
+
+// -------------------------------------------
+// JUMPFILE
+// -------------------------------------------
+cmd_jump = function(sess, args)
+    if not args or args.len < 1 then
+        print("Usage: jump <dir> (name)")
+        return
+    end if
+
+    if sess.handlerType != "start" and sess.handlerType != "shell" and sess.handlerType != "computer" then
+        print("jump: supported only in start/shell/computer")
+        return
+    end if
+
+    jumpDir = resolve_path(sess.cwd, args[0])
+    jumpName = "jumpfile"
+    if args.len >= 2 then jumpName = args[1]
+
+    comp = null
+    if sess.handlerType == "start" then
+        comp = get_shell.host_computer
+    else if sess.handlerType == "shell" then
+        comp = sess.object.host_computer
+    else if sess.handlerType == "computer" then
+        comp = sess.object
+    end if
+
+    if comp == null then
+        print("jump: no computer handler")
+        return
+    end if
+
+    folder = comp.File(jumpDir)
+    if not folder or not folder.is_folder or not folder.has_permission("w") then
+        print("jump: folder missing or no write permission: " + jumpDir)
+        return
+    end if
+
+    maker = comp.touch(jumpDir, jumpName + ".src")
+    if typeof(maker) == "string" then
+        print(maker)
+        return
+    end if
+
+    f = comp.File(jumpDir + "/" + jumpName + ".src")
+
+    
+    txt = ""
+    txt = txt + "interop = get_custom_object()" + "\n"
+    txt = txt + "user = ""user""" + "\n"
+    txt = txt + "pass = ""pass""" + "\n"
+
+    txt = txt + "if params.len >= 2 then" + "\n"
+    txt = txt + "    user = params[0]" + "\n"
+    txt = txt + "    pass = params[1]" + "\n"
+    txt = txt + "else if params.len == 1 then" + "\n"
+    txt = txt + "    user = params[0]" + "\n"
+    txt = txt + "end if" + "\n"
+
+    txt = txt + "interop.gshell = get_shell(user, pass)" + "\n"
+    txt = txt + "interop.gcurrentUser = user" + "\n"
+
+    f.set_content(txt)
+
+    print("Jumpfile created: " + f.path)
+end function
+
+
+cmd_sudo = function(sess, args)
+    if (sess.handlerType == "shell" and args.len < 4) or (sess.handlerType == "start" and args.len < 3) then 
+        return print("Usage: sudo -u <USER> <PASS> <JUMPFILE.src>")
+    end if
+
+    user = args[1]
+    pass = args[2]
+        
+    if sess.handlerType == "start" then
+        shell = get_shell(user, pass)
+        if not shell then return print("sudo: invalid user/pass")
+        sess.object = shell //-- not sure if you tracking .object on start sessions
+        sess.user = user
+        return print("Switched user to: " + sess.user)
+    end if
+
+    jumpfilePath = args[3]
+    shell = get_shell_obj(sess)
+    if not shell then return print("sudo: supported only in start/shell handlers")
+        
+    jump_file = create_jump_file(sess.object, jumpfilePath)
+    if not jump_file then return print("sudo: failed to create jumpfile at " + jumpfilePath)
+    
+    launch_args = user + " " + pass
+    launch_result = shell.launch(jump_file.path, launch_args)
+    if not launch_result or launch_result isa string then return print("sudo: jumpfile launch error: " + launch_result)
+    if not get_custom_object.gshell then return print("sudo: failed to acquire shell from jumpfile")
+    
+    sess.object = get_custom_object.gshell
+    sess.user = user
+    print "Switched user to: " + sess.user
+end function
+
+cmd_rm = function(sess, args)
+    if not args or args.len < 1 then
+        print("Usage: rm [-r] <path>")
+        return
+    end if
+
+    isRecursive = false
+    target = null
+
+    if args[0] == "-r" then
+        if args.len < 2 then
+            print("Usage: rm -r <path>")
+            return
+        end if
+        isRecursive = true
+        target = args[1]
+    else
+        target = args[0]
+    end if
+
+    path = resolve_path(sess.cwd, target)
+
+    comp = get_comp(sess)
+    if comp == null then
+        print("rm: unsupported handlerType: " + sess.handlerType)
+        return
+    end if
+
+    file = comp.File(path)
+    if file == null then
+        print("rm: file not found: " + path)
+        return
+    end if
+
+    if not file.has_permission("w") then
+        print("rm: permission denied")
+        return
+    end if
+
+    if file.is_folder and not file.is_symlink then
+        if not isRecursive then
+            print("rm: " + file.name + " is a directory")
+            return
+        end if
+    end if
+
+    out = file.delete
+    if out isa string and out.len > 0 then
+        print(out)
+        return
+    end if
+
+    print("Removed: " + path)
+end function
+
+
+
+// -------------------------------------------
+// NMAP 
+// -------------------------------------------
+cmd_nmap = function(sess, args)
+    if not args or args.len < 1 then
+        print("Usage: nmap <ip>")
+        return
+    end if
+
+
+
+ipAddress = args[0]
+isLanIp = is_lan_ip(ipAddress)
+router = null
+
+if isLanIp then
+    router = get_router
+else
+    if is_valid_ip(ipAddress) then
+        router = get_router(ipAddress)
+    else
+        ipAddress = nslookup(ipAddress)
+
+        
+        if not is_valid_ip(ipAddress) then
+            exit("<color=red>IP NOT FOUND</color>")
+        end if
+
+        router = get_router(ipAddress)
+    end if
+end if
+
+global = true
+if args.len == 2 and args[1] == "-l" then global = false
+
+
+if router == null then
+    exit("")
+end if
+
+print("IP: " + ipAddress)
+print("UMBRA>NMAP")
+
+print("-<b>ports</b>-------------------------------------------------------------")
+
+info = " <#D06B05>TYPE PORT STATE SERVICE VERSION LAN CONNECT\n"
+info = info + " <#04b7f3>Router 0 open router " + router.kernel_version + " " + router.local_ip + " true"
+
+lans = router.devices_lan_ip
+
+if not isLanIp then
+    u_ports = router.used_ports
+else
+    u_ports = router.device_ports(ipAddress)
+end if
+
+u_lans = []
+for port in u_ports
+    u_lans.push(port.get_lan_ip)
+end for
+
+results = []
+
+if global then
+    for lan in lans
+        lan_ports = router.device_ports(lan)
+
+        if lan_ports then
+            for port in lan_ports
+                lan = port.get_lan_ip
+
+                c = false
+                for res in results
+                    if lan == res then
+                        c = true
+                        break
+                    end if
+                end for
+                if c then continue
+
+                type = "Server"
+                if (lan.split("\.")[2] != router.local_ip.split("\.")[2] and port.port_number == 8080) or lan == router.local_ip or port.port_number == 8080 then
+                    type = "Subnet"
+                end if
+
+                service_info = router.port_info(port)
+
+                for p in lan_ports
+                    if p.port_number == 37777 then type = "Cam"
+                end for
+
+                connect = "false"
+                for ul in u_lans
+                    if ul == lan then connect = "true"
+                end for
+                if lan == router.local_ip then connect = "true"
+
+                port_status = "open"
+                if port.is_closed and not isLanIp then port_status = "closed"
+
+                if type == "Server" or type == "Cam" then
+                    if port_status == "open" then
+                        info = info + "\n <#05e365>" + type + " " + port.port_number + " " + port_status + " " + service_info + " " + lan + " " + connect
+                    else
+                        info = info + "\n <#d00505>" + type + " " + port.port_number + " " + port_status + " " + service_info + " " + lan + " " + connect
+                    end if
+                else
+                    info = info + "\n <#f5e294>" + type + " " + port.port_number + " " + port_status + " " + service_info + " " + lan + " " + connect
+                end if
+            end for
+        else
+            info = info + "\n <#ca45ff>Computer ### ### ### #### " + lan + " ####"
+        end if
+
+        results.push(lan)
+    end for
+
+    print(format_columns(info))
+else
+    lan_ports = router.used_ports
+
+    for port in lan_ports
+        lan = port.get_lan_ip
+
+        type = "Server"
+        if (lan.split("\.")[2] != router.local_ip.split("\.")[2] and port.port_number == 8080) or lan == router.local_ip or port.port_number == 8080 then
+            type = "Subnet"
+        end if
+
+        service_info = router.port_info(port)
+
+        for p in lan_ports
+            if p.port_number == 37777 then type = "Cam"
+        end for
+
+        connect = "false"
+        for ul in u_lans
+            if ul == lan then connect = "true"
+        end for
+        if lan == router.local_ip then connect = "true"
+
+        port_status = "open"
+        if port.is_closed and not isLanIp then port_status = "closed"
+
+        if type == "Server" or type == "Cam" then
+            if port_status == "open" then
+                info = info + "\n <#05e365>" + type + " " + port.port_number + " " + port_status + " " + service_info + " " + lan + " " + connect
+            else
+                info = info + "\n <#d00505>" + type + " " + port.port_number + " " + port_status + " " + service_info + " " + lan + " " + connect
+            end if
+        else
+            info = info + "\n <#f5e294>" + type + " " + port.port_number + " " + port_status + " " + service_info + " " + lan + " " + connect
+        end if
+    end for
+
+    print(format_columns(info))
+end if
+
+print("-<b>firewall</b>---------------------------------------------------------")
+
+info = "<#D06B05> ACTION PORT SOURCE_IP DESTINATION_IP"
+firewalls = router.firewall_rules
+
+if firewalls.len < 1 then
+    print("<#05e365>No firewall rules.")
+else
+    for fw in firewalls
+        action = fw.split(" ")[0]
+        if action == "ALLOW" then info = info + "\n<#05e365> " + fw
+        if action == "DENY" then info = info + "\n<#d00505> " + fw
+    end for
+    print(format_columns(info))
+end if
+
+print("-<b>whois</b>------------------------------------------------------------")
+
+whois_info = whois(ipAddress)
+
+for wh in whois_info.split("\n")
+    str = wh.split(":")[0]
+    info = wh.split(":")[1]
+
+    if str == "Domain name" then
+        print("<#04b7f3>Company name: <#05e365>" + info.replace(" ", "").split("\.")[0])
+        print("<#04b7f3>Website: <#05e365>www." + info.replace(" ", ""))
+    else if str == "Administrative contact" then
+        print("<#04b7f3>Admin fullname: <#05e365>" + info)
+    else if str == "Error" then
+        print("<b><color=red>Error: " + info)
+    else
+        print("<#04b7f3>" + str + ": <#05e365>" + info)
+    end if
+end for
+end function
+
+
+// -------------------------------------------
+// CRACK 
+// -------------------------------------------
+cmd_crack = function(sess, args)
+    if not args or args.len < 1 then
+        print("Usage: crack <HASH>")
+        return
+    end if
+
+    cryptools = include_lib("/lib/crypto.so")
+    if not cryptools then
+        print("Error: Missing crypto library")
+        return
+    end if
+
+    hash = args[0]
+    password = cryptools.decipher(hash)
+
+    if not password then
+        print("Can't find password :(")
+        return
+    end if
+
+    print("password found! => " + password)
+end function
+
+//exec command
+cmd_exec = function(sess, args)
+    if not args or args.len < 1 then
+        print("Usage: exec <path> (args...)")
+        return
+    end if
+
+    program = resolve_path(sess.cwd, args[0])
+
+    params = ""
+    if args.len > 1 then
+        for a in args[1:]
+            if params == "" then
+                params = a
+            else
+                params = params + " " + a
+            end if
+        end for
+    end if
+
+    if sess.handlerType == "start" then
+        res = get_shell.launch(program, params)
+        if res isa string and res.len > 0 then print(res)
+        return
+    end if
+
+    if sess.handlerType == "shell" then
+        res = sess.object.launch(program, params)
+        if res isa string and res.len > 0 then print(res)
+        return
+    end if
+
+    if sess.handlerType == "computer" then
+        print("exec: not supported in computer handler (need shell)")
+        return
+    end if
+
+    if sess.handlerType == "file" then
+        print("exec: not supported in file handler (need shell)")
+        return
+    end if
+
+    print("exec: not supported in handlerType: " + sess.handlerType)
+end function
+
+
+cmd_loot = function(sess, args)
+    print("\n-<b>loot</b>--->")
+
+    root = get_root(sess)
+    if root == null then
+        print("loot: no filesystem root")
+        return
+    end if
+
+    // -------------------------
+    // /etc/passwd
+    // -------------------------
+    passwd = get_file_at(root, "/etc/passwd")
+    print("\n-<b>users</b>------------------------------------------------------------")
+    if passwd != null and not passwd.is_folder and passwd.has_permission("r") then
+        print(passwd.get_content)
+    else
+        print("permission denied or not found")
+    end if
+
+    // -------------------------
+    // /home
+    // -------------------------
+    home = get_file_at(root, "/home")
+    if home == null or not home.is_folder then
+        print("\nloot: /home not found\n")
+        return
+    end if
+
+    foundAny = false
+    print("\n-<b>mail/bank</b>--------------------------------------------------------")
+
+    for userFolder in home.get_folders
+        if userFolder.name == "guest" then
+            continue
+        end if
+
+        // find Config folder
+        config = null
+        for sub in userFolder.get_folders
+            if sub.name == "Config" then
+                config = sub
+                break
+            end if
+        end for
+
+        if config == null then
+            continue
+        end if
+
+        // dump Mail.txt / Bank.txt if readable
+        for f in config.get_files
+            if not f.has_permission("r") then
+                continue
+            end if
+
+            if f.name == "Mail.txt" or f.name == "Bank.txt" then
+                print("\n---> /home/" + userFolder.name + "/Config/" + f.name + " <---")
+                print(f.get_content)
+                foundAny = true
+            end if
+        end for
+    end for
+
+    if not foundAny then
+        print("\n(no readable Mail.txt / Bank.txt found)")
+    end if
+end function
+
+
+cmd_ssh = function(sess, args)
+    if not args or args.len < 2 or args.len > 3 then
+        print("Usage: ssh <user>@<pass> <ip> (port)")
+        print("Example: ssh root@toor 161.210.48.100 22")
+        return
+    end if
+
+    // parse creds
+    credentials = args[0].split("@")
+    if credentials.len < 2 then
+        print("ssh: invalid credential format")
+        print("ssh: use <user>@<pass>")
+        return
+    end if
+
+    user = credentials[0]
+    password = credentials[1]
+    ip = args[1]
+
+    port = 22
+    if args.len == 3 then port = args[2].to_int
+    if typeof(port) != "number" then
+        print("ssh: invalid port: " + args[2])
+        return
+    end if
+
+    print("Connecting SSH to " + ip + ":" + str(port) + " as " + user + "...")
+
+    // save current session so back works
+    push_session(sess)
+
+    // connect
+    shell = get_shell.connect_service(ip, port, user, password, "ssh")
+
+    if typeof(shell) == "string" then
+        print("ssh: " + shell)
+        return
+    end if
+
+    if not shell then
+        print("ssh: connection failed")
+        return
+    end if
+
+    // switch session to that shell
+    sess.object = shell
+    sess.handlerType = "shell"
+
+    sess.pub_ip = shell.host_computer.public_ip
+    sess.lan_ip = shell.host_computer.local_ip
+    sess.user = check_user(shell)
+
+    if sess.user == "root" then
+        sess.cwd = "/root"
+    else
+        sess.cwd = "/home/" + sess.user
+    end if
+
+    print("Connected. Handler: shell as " + sess.user)
+end function
+
+
+cmd_passwd = function(sess, args)
+    if not args or args.len < 1 then
+        print("Usage: passwd <USER>")
+        return
+    end if
+
+    user = args[0]
+
+    // works in start/shell/computer
+    comp = get_comp(sess)
+    if comp == null then
+        print("passwd: unsupported handlerType: " + sess.handlerType)
+        return
+    end if
+
+    inputMsg = "Changing password for user " + user + ".\nNew password:"
+    inputPass = user_input(inputMsg, true)
+
+    if inputPass == null or inputPass.len == 0 then
+        print("passwd: aborted")
+        return
+    end if
+
+    output = comp.change_password(user, inputPass)
+
+    if output == true then
+        print("password modified OK")
+        return
+    end if
+
+    if output then
+        print(output)
+        return
+    end if
+
+    print("Error: password not modified")
+end function
+
+
+
+cmd_chmod = function(sess, args)
+    if not args or (args.len != 2 and args.len != 3) then
+        print("Usage:")
+        print("  chmod <PERMS> <PATH>")
+        print("  chmod -r <PERMS> <PATH>")
+        return
+    end if
+
+    isRecursive = 0
+    permissions = ""
+    pathFile = ""
+
+    if args.len == 2 then
+        permissions = args[0]
+        pathFile = resolve_path(sess.cwd, args[1])
+    else
+        if args[0] != "-r" then
+            print("chmod: unknown option " + args[0])
+            print("Usage: chmod -r <PERMS> <PATH>")
+            return
+        end if
+        isRecursive = 1
+        permissions = args[1]
+        pathFile = resolve_path(sess.cwd, args[2])
+    end if
+
+    comp = get_comp(sess)
+    if comp == null then
+        print("chmod: unsupported handlerType: " + sess.handlerType)
+        return
+    end if
+
+    file = comp.File(pathFile)
+    if file == null then
+        print("chmod: can't find " + pathFile)
+        return
+    end if
+
+    output = file.chmod(permissions, isRecursive)
+    if output then
+        print(output)
+        return
+    end if
+
+    print("chmod: updated permissions on " + pathFile)
+end function
+
+cmd_aptget = function(sess, args)
+    // load aptclient
+    aptclient = include_lib("/lib/aptclient.so")
+    if not aptclient then
+        aptclient = include_lib(sess.cwd + "/aptclient.so")
+    end if
+    if not aptclient then
+        print("apt-get: Missing aptclient.so library in /lib or current folder")
+        return
+    end if
+
+    // we need a computer filesystem
+    comp = get_comp(sess)
+    if comp == null then
+        print("apt-get: unsupported handlerType: " + sess.handlerType)
+        return
+    end if
+
+    PendingUpdating = function(folderPath)
+        pendingUpdate = []
+        targetFolder = comp.File(folderPath)
+        if targetFolder != null then
+            files = targetFolder.get_files
+            for itemFile in files
+                output = aptclient.check_upgrade(itemFile.path)
+                if output == true then
+                    pendingUpdate.push(itemFile.name)
+                end if
+            end for
+        end if
+        return pendingUpdate
+    end function
+
+    if not args or args.len == 0 or args.len > 3 then
+        print("Usage:")
+        print("  apt-get update")
+        print("  apt-get install <pkg> (customPath)")
+        print("  apt-get search <term>")
+        print("  apt-get show <pkg>")
+        print("  apt-get addrepo <ip> (port)")
+        print("  apt-get delrepo <ip>")
+        print("  apt-get upgrade")
+        print("  apt-get upgrade <pkg>")
+        return
+    end if
+
+    action = args[0]
+
+    // ----------------------------------------------------
+    // update
+    // ----------------------------------------------------
+    if action == "update" then
+        print("Updating package lists...")
+        output = aptclient.update
+        if output then print(output) else print("apt-get: update complete")
+        return
+    end if
+
+    // ----------------------------------------------------
+    // install
+    // ----------------------------------------------------
+    if action == "install" then
+        if args.len < 2 then
+            print("Usage: apt-get install <pkg> (customPath)")
+            return
+        end if
+
+        print("Reading package lists...")
+        print("Downloading " + args[1])
+
+        customPath = ""
+        if args.len == 3 then customPath = args[2]
+
+        output = aptclient.install(args[1], customPath)
+        if output == true then
+            print(args[1] + " installed")
+            return
+        end if
+        print(output)
+        return
+    end if
+
+    // ----------------------------------------------------
+    // search
+    // ----------------------------------------------------
+    if action == "search" then
+        if args.len != 2 then
+            print("Usage: apt-get search <term>")
+            return
+        end if
+        print(aptclient.search(args[1]))
+        return
+    end if
+
+    // ----------------------------------------------------
+    // show
+    // ----------------------------------------------------
+    if action == "show" then
+        if args.len != 2 then
+            print("Usage: apt-get show <pkg>")
+            return
+        end if
+        print(aptclient.show(args[1]))
+        return
+    end if
+
+    // ----------------------------------------------------
+    // addrepo
+    // ----------------------------------------------------
+    if action == "addrepo" then
+        if args.len < 2 or args.len > 3 then
+            print("Usage: apt-get addrepo <ip> (port)")
+            return
+        end if
+
+        port = 1542
+        if args.len == 3 then port = args[2].to_int
+        if typeof(port) != "number" then
+            print("apt-get: invalid port")
+            return
+        end if
+
+        output = aptclient.add_repo(args[1], port)
+        if output then
+            print(output)
+            return
+        end if
+
+        print("Repository " + args[1] + " added succesfully.")
+        print("Run apt-get update to apply the changes")
+        return
+    end if
+
+    // ----------------------------------------------------
+    // delrepo
+    // ----------------------------------------------------
+    if action == "delrepo" then
+        if args.len != 2 then
+            print("Usage: apt-get delrepo <ip>")
+            return
+        end if
+
+        output = aptclient.del_repo(args[1])
+        if output then
+            print(output)
+            return
+        end if
+
+        print("Repository " + args[1] + " removed succesfully.")
+        print("Run apt-get update to apply the changes")
+        return
+    end if
+
+    // ----------------------------------------------------
+    // upgrade
+    // ----------------------------------------------------
+    if action == "upgrade" then
+        print("Reading package lists...")
+
+        // upgrade all packages
+        if args.len == 1 then
+            pendingPackages = PendingUpdating("/lib") + PendingUpdating("/bin")
+
+            if pendingPackages.len == 0 then
+                print("No updates needed")
+                return
+            end if
+
+            print("The following packages will be updated:")
+            pkgs = ""
+            for itemPackage in pendingPackages
+                pkgs = pkgs + " " + itemPackage
+            end for
+            print(pkgs)
+
+            option = user_input("\nDo you want to continue?(y/n): ")
+            if option != "y" and option != "yes" then
+                print("aborted")
+                return
+            end if
+
+            counter = 0
+            for itemPackage in pendingPackages
+                output = aptclient.install(itemPackage)
+                if output == true then
+                    counter = counter + 1
+                else if output then
+                    print(output)
+                end if
+            end for
+
+            print(str(counter) + " packages updated")
+            return
+        end if
+
+        // upgrade specific package
+        if args.len == 2 then
+            pkg = args[1]
+
+            output = aptclient.check_upgrade("/lib/" + pkg)
+            if typeof(output) == "string" then
+                output = aptclient.check_upgrade("/bin/" + pkg)
+            end if
+
+            if not output then
+                print("No updates needed")
+                return
+            end if
+
+            if output == true then
+                print("The following package will be updated:\n" + pkg)
+
+                option = user_input("\nDo you want to continue?(y/n): ")
+                if option != "y" and option != "yes" then
+                    print("aborted")
+                    return
+                end if
+
+                output = aptclient.install(pkg)
+                if output == true then
+                    print(pkg + " installed.")
+                    return
+                end if
+
+                print(output)
+                return
+            end if
+
+            // if output is a string
+            print(output)
+            return
+        end if
+    end if
+
+    // ----------------------------------------------------
+    // unknown
+    // ----------------------------------------------------
+    print("apt-get: unknown action: " + action)
+end function
+
+
+
+
+
+register_commands = function()
+    cmds = {}
+
+    cmds["help"] = {"help":"help - show help", "func":@cmd_help}
+    cmds["clear"] = {"help":"clear - clear screen", "func":@cmd_clear}
+    cmds["exit"] = {"help":"exit - exit pseudo shell", "func":@cmd_exit}
+
+    cmds["pwd"] = {"help":"pwd - print current directory", "func":@cmd_pwd}
+    cmds["cd"] = {"help":"cd [path] - change directory", "func":@cmd_cd}
+    cmds["ls"] = {"help":"ls (path) - list directory contents", "func":@cmd_ls}
+    cmds["tree"] = {"help":"tree (path) - show directory tree", "func":@cmd_tree}
+
+    cmds["cat"] = {"help":"cat <path> - show file content", "func":@cmd_cat}
+
+    cmds["exploit"] = {"help":"exploit <ip> <port> (injectArg)", "func":@cmd_exploit}
+    cmds["disconnect"] = {"help":"disconnect - return to local start handler", "func":@cmd_disconnect}
+
+    cmds["nmap"] = {"help":"nmap <ip> (-l) - scan ip", "func":@cmd_nmap}
+
+    cmds["crack"] = {"help":"crack <HASH> - crack hash", "func":@cmd_crack}
+
+    cmds["jump"] = {"help":"jump <dir> (name) - create jumpfile", "func":@cmd_jump}
+    cmds["sudo"] = {"help":"sudo -u <USER> <PASS> <JUMPFILE.src> - login", "func":@cmd_sudo}
+    cmds["exec"] = {"help":"exec <path> (args...) - execute program", "func":@cmd_exec}
+    cmds["loot"] = {"help":"loot - dumps creds ", "func":@cmd_loot}
+    cmds["rm"] = {"help":"rm - removes a file rm -r removes folder ", "func":@cmd_rm}
+    cmds["touch"] = {"help":"touch <file> - create a text file", "func":@cmd_touch}
+    cmds["mkdir"] = {"help":"mkdir <folder> - create a folder", "func":@cmd_mkdir}
+    cmds["back"] = {"help":"back - return to previous session", "func":@cmd_back}
+    cmds["log"] = {"help":"log -d / log -u <REMOTE_PATH> - download/upload system.log", "func":@cmd_log}
+    cmds["targets"] = {"help":"targets - shows targets list from exploit scan", "func":@cmd_targets}
+    cmds["switch"] = {"help":"use - lets you pick a target from list", "func":@cmd_switch}
+    cmds["download"] = {"help":"download <REMOTE_PATH> <LOCAL_PATH> - download file from remote to local", "func":@cmd_download}
+    cmds["upload"] = {"help":"upload <LOCAL_PATH> <REMOTE_FOLDER> - upload file from local to remote", "func":@cmd_upload}
+    cmds["ssh"] = {"help":"ssh <user>@<pass> <ip> (port) - connect to ssh service", "func":@cmd_ssh}
+    cmds["passwd"] = {"help":"passwd <USER> - change user password", "func":@cmd_passwd}
+    cmds["chmod"] = {"help":"chmod <PERMS> <PATH> | chmod -r <PERMS> <PATH> - change file/folder permissions", "func":@cmd_chmod}
+    cmds["nslookup"] = {"help":"nslookup <domain> - resolve domain to IP", "func":@cmd_nslookup}
+    cmds["chgrp"] = {"help":"chgrp <GROUP> <PATH> | chgrp -r <GROUP> <PATH> - change file/folder group", "func":@cmd_chgrp}
+    cmds["chown"] = {"help":"chown <USER> <PATH> | chown -r <USER> <PATH> - change file/folder owner", "func":@cmd_chown}
+    cmds["apt-get"] = {"help":"apt-get <action> [params...] - package manager", "func":@cmd_aptget}
+    cmds["getlib"] = {"help":"getlib <path> - import library", "func":@cmd_getlib}
+    cmds["libs"]   = {"help":"libs - list imported libraries", "func":@cmd_libs}
+    cmds["uselib"] = {"help":"uselib <index> - set active library", "func":@cmd_uselib}
+    cmds["dellib"] = {"help":"dellib <index|A-B> - delete library", "func":@cmd_dellib}
+    
+
+    return cmds
+end function

@@ -1,0 +1,44 @@
+user_mark = function(sess)
+    if sess.user == "root" then
+        return bold + dorange + "#" + stopCol + boldend
+    else
+        return bold + dorange + "$" + stopCol + boldend
+    end if
+end function
+
+home_path = function(sess)
+    if sess.user == "root" then
+        return bold + dorange + "/root" + stopCol + boldend
+    else
+        return bold + dorange + "/" + sess.user + stopCol + boldend
+    end if
+end function
+
+currUser = function(sess)
+    return bold + dorange + sess.user + stopCol + boldend
+end function
+
+build_prompt = function(sess)
+    pubIp = bold + green + sess.pub_ip + boldend + stopCol
+    lanIp = bold + dgrey + sess.lan_ip + boldend + stopCol
+
+    p = lgrey + "<voffset=1em><pos=0px>—" +
+        "[" + dorange + sess.handlerType + lgrey + "]" +
+        "[" + currUser(sess) + "]" +
+        "<voffset=1em>—" +
+
+        "<voffset=1em>—————" +
+        "[" + pubIp + lgrey + "]" +
+        "(" + lanIp + lgrey + ")" +
+        "<voffset=1em>—" +
+
+        "<voffset=-1em><pos=0>—" +
+        "<voffset=-1em>—" +
+        "<voffset=-1em>—" +
+        "<voffset=-1em>—" +
+
+        "[" + user_mark(sess) + lgrey + "] " +
+        home_path(sess) + dorange + ">" + stopCol
+
+    return p
+end function

@@ -1,0 +1,275 @@
+
+create_jump_file = function(shell, dir)
+    txt = "get_custom_object.gshell = get_shell(params[0], params[1])"
+    c = shell.host_computer
+    res = c.touch(dir, "jumpfile.src")
+    if res isa string and res.is_match("permission") then return print(res)
+    file = c.File(dir + "/jumpfile.src")
+    file.set_content(txt)
+    build_res = shell.build(file.path, dir)
+    if build_res.len > 0 then return print("Warning: jumpfile build warnings:\n" + build_res)
+    file.set_content("")
+    return c.File(dir + "/jumpfile")
+end function
+
+get_shell_obj = function(sess)
+    if sess.handlerType == "start" then
+        return get_shell
+    else if sess.handlerType == "shell" then
+        return sess.object
+    end if
+end function
+
+
+
+get_comp = function(sess)
+    if sess.handlerType == "start" then
+        return get_shell.host_computer
+    else if sess.handlerType == "shell" then
+        return sess.object.host_computer
+    else if sess.handlerType == "computer" then
+        return sess.object
+    end if
+    return null
+end function
+
+
+
+
+
+
+
+
+
+
+get_object_user = function(obj)
+    if obj == null then return "guest"
+
+    // common fields
+    if obj.hasIndex("current_user") then return obj.current_user
+    if obj.hasIndex("active_user") then return obj.active_user
+    if obj.hasIndex("logged_user") then return obj.logged_user
+    if obj.hasIndex("login_user") then return obj.login_user
+
+    if obj.hasIndex("user") then return obj.user
+    if obj.hasIndex("username") then return obj.username
+    if obj.hasIndex("owner") then return obj.owner
+    if obj.hasIndex("account") then return obj.account
+
+    // sometimes nested in credentials
+    if obj.hasIndex("creds") then
+        if obj.creds and obj.creds.hasIndex("user") then return obj.creds.user
+        if obj.creds and obj.creds.hasIndex("username") then return obj.creds.username
+    end if
+
+    return "guest"
+end function
+
+
+
+push_session = function(sess)
+    if not sess.hasIndex("stack") then
+        sess.stack = []
+    end if
+
+    snap = {}
+    snap.object = sess.object
+    snap.handlerType = sess.handlerType
+    snap.cwd = sess.cwd
+    snap.pub_ip = sess.pub_ip
+    snap.lan_ip = sess.lan_ip
+    snap.user = sess.user
+
+    sess.stack.push(snap)
+end function
+
+
+pop_session = function(sess)
+    if not sess.hasIndex("stack") or sess.stack.len == 0 then
+        return null
+    end if
+    return sess.stack.pop
+end function
+
+
+
+normalize_object_root = function(obj)
+    if obj == null then return null
+
+    t = typeof(obj)
+
+    // shell -> host computer
+    if t == "shell" then
+        return obj.host_computer.File("/")
+    end if
+
+    // computer -> computer root
+    if t == "computer" then
+        return obj.File("/")
+    end if
+
+    // file -> climb to parent until root
+    if t == "file" then
+        f = obj
+        while f.parent
+            f = f.parent
+        end while
+        return f
+    end if
+
+    return null
+end function
+
+
+
+check_user = function(obj)
+    root_folder = normalize_object_root(obj)
+    if root_folder == null then return "guest"
+
+    // check /root
+    for folder in root_folder.get_folders
+        if folder.name == "root" then
+            if folder.has_permission("r") and folder.has_permission("w") and folder.has_permission("x") then
+                return "root"
+            end if
+        end if
+    end for
+
+    // check /home users
+    for folder in root_folder.get_folders
+        if folder.name != "home" then continue
+
+        for userfolder in folder.get_folders
+            // guest folder exists sometimes, ignore it if possible
+            if userfolder.name != "guest" then
+                if userfolder.has_permission("r") and userfolder.has_permission("w") then
+                    return userfolder.name
+                end if
+            end if
+        end for
+    end for
+
+    return "guest"
+end function
+
+
+
+get_root = function(sess)
+    if sess.handlerType == "start" then
+        return get_shell.host_computer.File("/")
+    end if
+
+    if sess.handlerType == "shell" then
+        return sess.object.host_computer.File("/")
+    end if
+
+    if sess.handlerType == "computer" then
+        return sess.object.File("/")
+    end if
+
+    if sess.handlerType == "file" then
+        f = sess.object
+        while f.parent
+            f = f.parent
+        end while
+        return f
+    end if
+
+    return null
+end function
+
+
+// -------------------------------------------
+// Path utils
+// -------------------------------------------
+normalize_path = function(path)
+    if path == null then return "/"
+    if path == "" then return "/"
+
+    // remove duplicate slashes
+    while path.indexOf("//") != null
+        path = path.replace("//", "/")
+    end while
+
+    if path.len > 1 and path[-1] == "/" then
+        path = path[:-1]
+    end if
+
+    if path == "" then path = "/"
+    return path
+end function
+
+
+resolve_path = function(cwd, inputPath)
+    if inputPath == null or inputPath == "" then
+        return normalize_path(cwd)
+    end if
+
+    if inputPath[0] == "/" then
+        return normalize_path(inputPath)
+    end if
+
+    if cwd == "/" then
+        return normalize_path("/" + inputPath)
+    end if
+
+    return normalize_path(cwd + "/" + inputPath)
+end function
+
+
+split_path = function(path)
+    path = normalize_path(path)
+    if path == "/" then return []
+
+    parts = path.split("/")
+    cleaned = []
+
+    for p in parts
+        if p == "" then continue
+        if p == "." then continue
+
+        if p == ".." then
+            if cleaned.len > 0 then cleaned.pop
+            continue
+        end if
+
+        cleaned.push(p)
+    end for
+
+    return cleaned
+end function
+
+
+get_file_at = function(root, absPath)
+    if root == null then return null
+    absPath = normalize_path(absPath)
+    if absPath == "/" then return root
+
+    parts = split_path(absPath)
+    cur = root
+
+    for p in parts
+        found = null
+
+        for f in cur.get_folders
+            if f.name == p then
+                found = f
+                break
+            end if
+        end for
+
+        if found == null then
+            for fi in cur.get_files
+                if fi.name == p then
+                    found = fi
+                    break
+                end if
+            end for
+        end if
+
+        if found == null then return null
+        cur = found
+    end for
+
+    return cur
+end function

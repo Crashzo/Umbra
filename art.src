@@ -1,0 +1,23 @@
+logo = function()
+txt = ""
+
+txt = txt + bold + orange + " ____ ___      ___. " + "\n"                
+txt = txt + bold + orange + "|    |   \_____\_ |______________ "   + "\n"
+txt = txt + bold + orange + "|    |   /     \| __ \_  __ \__  \ " + "\n"
+txt = txt + bold + orange + "|    |  /  Y Y  \ \_\ \  | \// __ \_ " + "\n"
+txt = txt + bold + orange + "|______/|__|_|  /___  /__|  (____  / " + "\n"
+txt = txt + bold + orange + "              \/    \/           \/ " + grey + "1.0.0" + "\n"
+txt = txt + "-[" + bold + "umbra" + boldend + "]-----------------[" + bold + "multi-tool" + boldend + "]---------------------" + bold + ">\n" + "\n"
+txt = txt + "-" + bold + "author" + boldend + "---" + bold + ">" + orange + "Crasho\n"
+
+
+print(txt)
+
+
+end function
+
+
+
+
+
+

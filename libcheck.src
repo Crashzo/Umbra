@@ -1,0 +1,69 @@
+
+
+
+
+
+
+loadLib = function(lib)
+    comp = get_shell.host_computer
+    if lib == "meta" then lib = comp.File("/lib/metaxploit.so")
+    if lib == "crypto" then lib = comp.File("/lib/crypto.so")
+    if lib != null then
+        return bold + green + "loaded" + stopCol + boldend
+    else
+        return bold + red + "missing" + stopCol + boldend
+    end if
+end function
+
+checkLib = function(lib)
+    comp = get_shell.host_computer
+    if lib == "meta" then lib = comp.File("/lib/metaxploit.so")
+    if lib == "crypto" then lib = comp.File("/lib/crypto.so")
+    if lib != null then
+        return  green + check + stopCol
+    else
+        return bold + red + "X" + stopCol + boldend
+    end if
+end function
+
+libColor = function(lib)
+    comp = get_shell.host_computer
+
+    if lib == "crypto" then
+        f = comp.File("/lib/crypto.so")
+        if f != null then
+            return bold + green + "crypto.so" + stopCol + boldend
+        else
+            return bold + red + "crypto.so" + stopCol + boldend
+        end if
+
+    else if lib == "meta" then
+        f = comp.File("/lib/metaxploit.so")
+        if f != null then
+            return bold + green + "metax.so" + stopCol + boldend
+        else
+            return bold + red + "metax.so" + stopCol + boldend
+        end if
+    end if
+
+    return bold + red + "unknown lib" + stopCol + boldend
+end function
+
+
+
+
+
+
+
+check = "<cspace=-0.4em><rotate=-75><voffset=-0.22em>></voffset></rotate><voffset=0.09em>/</voffset></cspace>"
+
+metaxCheck = lgrey + "<pos=1em>——————" + dorange + "[" + libColor("meta") + "]" +
+lgrey + "———————" + dorange + "(" + loadLib("meta") + ")" + lgrey + "——————" +
+dorange + ">[" +checkLib("meta") + "]" + stopCol
+
+
+cryptoCheck = lgrey + "<pos=1em>——————" + dorange + "[" + libColor("crypto") + "]" + 
+lgrey + "——————" + dorange + "(" + loadLib("crypto") + ")" + lgrey + "——————" +
+dorange + ">[" + checkLib("crypto") + "]" + stopCol
+
+print(metaxCheck + char(10) + cryptoCheck)
