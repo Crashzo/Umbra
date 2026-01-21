@@ -1,2 +1,4 @@
-# Umbra
-Umbra is a hacking multi-tool for game called Grey Hack 
+# Umbra 1.0.0
+UMBRA IS A HACKING MULTI-TOOL FOR GAME CALLED GREY HACK
+
+NOT INTEDED FOR USE OUTSIDE THE GAME
